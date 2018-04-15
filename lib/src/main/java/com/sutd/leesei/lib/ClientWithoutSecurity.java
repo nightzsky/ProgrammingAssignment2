@@ -40,10 +40,8 @@ public class ClientWithoutSecurity {
         Cipher cipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
         cipher.init(Cipher.DECRYPT_MODE,serverPubKey);
         byte[] decryptedR = cipher.doFinal(encryptedR);
-       // System.out.println(new String(decryptedR));
 
         byte[] Rbyte = BigInteger.valueOf(R).toByteArray();
-        System.out.println(Arrays.equals(Rbyte,decryptedR));
         if (Arrays.equals(Rbyte,decryptedR)){
             match = true;
         }
@@ -72,7 +70,6 @@ public class ClientWithoutSecurity {
     //send message to the server
     public static void sendMessageToServer(int packetType, DataOutputStream toServer,byte[] message) throws Exception{
         toServer.writeInt(packetType);
-        System.out.println(message.length);
         toServer.writeInt(message.length);
         toServer.write(message);
         toServer.flush();
@@ -93,7 +90,7 @@ public class ClientWithoutSecurity {
 
     public static void main(String[] args) {
 
-        String filename = "ATaleOfTwoCities.txt";
+        String filename = "rr.txt";
         if (args.length > 0) filename = args[0];
 
         String serverAddress = "localhost";
@@ -114,7 +111,7 @@ public class ClientWithoutSecurity {
 
         int R = 0;
         byte[] encryptedR = null;
-        X509Certificate serverCert;
+        X509Certificate serverCert = null;
 
         long timeStarted = System.nanoTime();
 
@@ -213,6 +210,9 @@ public class ClientWithoutSecurity {
             bufferedFileInputStream = new BufferedInputStream(fileInputStream);
 
             byte [] fromFileBuffer = new byte[117];
+
+            //get public key from the server certificate for encryption
+            PublicKey publicKey = getPublicKey(serverCert);
 
             // Send the file
             for (boolean fileEnded = false; !fileEnded;) {

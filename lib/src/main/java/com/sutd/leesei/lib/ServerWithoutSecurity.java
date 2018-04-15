@@ -27,7 +27,6 @@ public class ServerWithoutSecurity {
     public static byte[] responseFromClient(DataInputStream fromClient){
         try {
             int byteLength = fromClient.readInt();
-            System.out.println(byteLength);
             byte[] byteReceived = new byte[byteLength];
             fromClient.readFully(byteReceived,0,byteReceived.length);
             return byteReceived;
@@ -159,7 +158,9 @@ public class ServerWithoutSecurity {
                 }
 
                 else if (packetType == 1) {
-
+                    //get server private key to decrypt the file received from client
+                    PrivateKey privateKey = getPrivateKey();
+                    
                     int numBytes = fromClient.readInt();
                     byte [] block = new byte[numBytes];
                     fromClient.readFully(block, 0, numBytes);

@@ -1,16 +1,18 @@
 package com.sutd.leesei.lib;
 
-/**
- * Created by Nightzsky on 4/15/2018.
- */
+/*
+    Author: Siow Lee Sei(1002257), Ong Jing Xuan(1002065)
+*/
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
@@ -18,34 +20,38 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
 
 import javax.crypto.Cipher;
 
 public class ServerCP1 {
-    public static byte[] responseFromClient(DataInputStream fromClient){
+
+    //receive the response from client
+    public static byte[] responseFromClient(DataInputStream fromClient) {
         try {
             int byteLength = fromClient.readInt();
             byte[] byteReceived = new byte[byteLength];
-            fromClient.readFully(byteReceived,0,byteReceived.length);
+            fromClient.readFully(byteReceived, 0, byteReceived.length);
             return byteReceived;
-        }catch (IOException ex){
+        } catch (IOException ex) {
             ex.printStackTrace();
         }
         return null;
     }
 
-    public static void sendResponseToClient(int packetType,DataOutputStream toClient,byte[] message) throws Exception{
-        //byte[] messageByte = message.getBytes();
+    //send the response to the client
+    public static void sendResponseToClient(int packetType,DataOutputStream toClient,byte[] message) throws Exception {
         toClient.writeInt(packetType);
         toClient.writeInt(message.length);
         toClient.write(message);
         toClient.flush();
+
     }
+
+    //get the private key of the server certificate
     public static PrivateKey getPrivateKey() throws Exception{
-        File file = new File("C:\\Users\\Nightzsky\\Downloads\\privateServer.der");
+        //File file = new File("C:\\Users\\Nightzsky\\Downloads\\privateServer.der");
+        File file = new File("privateServer.der");
         byte[] privateKeyByte = new byte[(int)file.length()];
         InputStream server = new FileInputStream(file);
         server.read(privateKeyByte);
@@ -57,18 +63,26 @@ public class ServerCP1 {
 
     }
 
+    //get the server certificate
     public static byte[] getServerCertificate() throws Exception{
-        File file = new File("C:\\Users\\Nightzsky\\Downloads\\server.crt");
+        File file = new File("server.crt");
+        //File file = new File("C:\\Users\\Nightzsky\\Downloads\\server.crt");
         byte[] serverCertByte = new byte[(int)file.length()];
         BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file));
         bis.read(serverCertByte,0,serverCertByte.length);
 
         return serverCertByte;
     }
+
     public static void main(String[] args) {
 
         int port = 4321;
         if (args.length > 0) port = Integer.parseInt(args[0]);
+
+        int totalFileSize = 0;
+        int receivedFileSize = 0;
+        String originalFilename = null;
+        String decryptedFilename = null;
 
         ServerSocket welcomeSocket = null;
         Socket connectionSocket = null;
@@ -88,7 +102,7 @@ public class ServerCP1 {
 
                 int packetType = fromClient.readInt();
 
-                //This packet mainly dealed with the string message that sent between server and client
+                //This packet mainly deal with the string message that sent between server and client
                 if (packetType == 4) {
                     byte[] messageFromClient = responseFromClient(fromClient);
                     System.out.println("Message From Client: " + new String(messageFromClient));
@@ -108,6 +122,7 @@ public class ServerCP1 {
                     }
 
                 }
+
                 //This packet mainly deal with the receiving R and sending back encrypting R
                 //received R from client and encrypt it using server's private key and send the encrypted R to the client
                 else if (packetType == 5) {
@@ -132,11 +147,8 @@ public class ServerCP1 {
                     byte[] responseFromClient = responseFromClient(fromClient);
                     if ((new String(responseFromClient)).contains("Bye")) {
                         System.out.println("Connection closed");
-                        //connectionSocket.close();
                     } else if ((new String(responseFromClient)).contains("Handshake")) {
                         System.out.println("Handshake with the client");
-                        //sendResponseToClient(0,toClient,"You can start sending the file".getBytes());
-                        //  connectionSocket.close();
                     }
                 }
 
@@ -146,43 +158,104 @@ public class ServerCP1 {
                     System.out.println("Receiving file...");
 
                     int numBytes = fromClient.readInt();
+                    totalFileSize = fromClient.readInt();
                     System.out.println(numBytes);
                     byte [] filename = new byte[numBytes];
+
                     // Must use read fully!
                     // See: https://stackoverflow.com/questions/25897627/datainputstream-read-vs-datainputstream-readfully
                     fromClient.readFully(filename, 0, numBytes);
 
-                    fileOutputStream = new FileOutputStream("recv_"+new String(filename, 0, numBytes));
+                    originalFilename = new String(filename,0,numBytes);
+                    decryptedFilename = "recv_"+originalFilename;
+
+                    fileOutputStream = new FileOutputStream(decryptedFilename);
                     bufferedFileOutputStream = new BufferedOutputStream(fileOutputStream);
 
                     // If the packet is for transferring a chunk of the file
                 }
 
+                //This packet for receiving the file content
                 else if (packetType == 1) {
                     //get server private key to decrypt the file received from client
                     PrivateKey privateKey = getPrivateKey();
+                    Cipher decryptCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+                    decryptCipher.init(Cipher.DECRYPT_MODE,privateKey);
 
                     int numBytes = fromClient.readInt();
-                    byte [] block = new byte[numBytes];
-                    fromClient.readFully(block, 0, numBytes);
+                    int encryptedContentByte = fromClient.readInt();
 
-                    if (numBytes > 0)
-                        bufferedFileOutputStream.write(block, 0, numBytes);
+                    System.out.println(numBytes);
+                    byte [] block = new byte[encryptedContentByte];
+//                    fromClient.readFully(block, 0, encryptedContentByte);
+                    fromClient.read(block);
 
-                    if (numBytes < 117) {
-                        System.out.println("Closing connection...");
+                    byte[] decryptedContent = decryptCipher.doFinal(block);
 
-                        if (bufferedFileOutputStream != null) bufferedFileOutputStream.close();
-                        if (bufferedFileOutputStream != null) fileOutputStream.close();
-                        fromClient.close();
-                        toClient.close();
-                        connectionSocket.close();
+                    receivedFileSize += numBytes;
+
+                    if (numBytes > 0){
+                        bufferedFileOutputStream.write(decryptedContent, 0, numBytes);
+                        bufferedFileOutputStream.flush();
                     }
+                    System.out.println(totalFileSize);
+                    System.out.println(receivedFileSize);
+                    if (receivedFileSize == totalFileSize){
+                        break;
+                    }
+
                 }
 
             }
+
+            //inform the client that it's done and close all the connection and stream
+            sendResponseToClient(3,toClient,"Done".getBytes());
+            fileOutputStream.close();
+            bufferedFileOutputStream.close();
+            fromClient.close();
+            toClient.close();
+            connectionSocket.close();
+
+            //check if the original file and the decrypted file match, if flag = 1, means they are matched
+            int flag = checkFile(originalFilename,decryptedFilename);
+            if (flag == 1){
+                System.out.println("The original file and the decrypted file matched!");
+            }
+            else {
+                System.out.println("The original file and the decrypted file do not match!");
+            }
+
+
         } catch (Exception e) {e.printStackTrace();}
 
+
+
     }
+
+    //compare the original file and decrypted file
+    public static int checkFile(String originalFile, String decryptedFile) throws Exception{
+        File f1 = new File(originalFile);// OUTFILE
+        File f2 = new File(decryptedFile);// INPUT
+
+        FileReader fR1 = new FileReader(f1);
+        FileReader fR2 = new FileReader(f2);
+
+        BufferedReader reader1 = new BufferedReader(fR1);
+        BufferedReader reader2 = new BufferedReader(fR2);
+
+        String line1 = null;
+        String line2 = null;
+        int flag = 1;
+        while ((flag == 1) && ((line1 = reader1.readLine()) != null)
+                && ((line2 = reader2.readLine()) != null)) {
+            if (!line1.equals(line2))
+                flag = 0;
+        }
+        reader1.close();
+        reader2.close();
+        System.out.println("Flag " + flag);
+        return flag;
+    }
+
 
 }

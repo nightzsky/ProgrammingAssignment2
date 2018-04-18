@@ -21,9 +21,6 @@ import java.util.Arrays;
 import java.util.Random;
 
 import javax.crypto.Cipher;
-import javax.print.attribute.standard.JobMessageFromOperator;
-
-import jdk.internal.dynalink.support.TypeConverterFactory;
 
 public class ClientWithoutSecurity {
 

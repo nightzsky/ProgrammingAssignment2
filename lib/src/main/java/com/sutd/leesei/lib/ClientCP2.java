@@ -1,21 +1,20 @@
 package com.sutd.leesei.lib;
 
-/**
- * Created by Nightzsky on 4/15/2018.
- */
-
+/*
+    Author: Siow Lee Sei(1002257), Ong Jing Xuan(1002065)
+*/
 import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.Socket;
-import java.nio.ByteBuffer;
-import java.security.Key;
-import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -25,9 +24,6 @@ import java.util.Random;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
-import javax.print.attribute.standard.JobMessageFromOperator;
-
-import jdk.internal.dynalink.support.TypeConverterFactory;
 
 public class ClientCP2 {
 
@@ -64,7 +60,8 @@ public class ClientCP2 {
     public static boolean verifyServerCert(String serverCertString, X509Certificate serverCert) throws Exception{
         boolean verified = false;
         if (serverCertString.contains("Nightzsky")){
-            InputStream fis = new FileInputStream("C:\\Users\\Nightzsky\\Downloads\\CA.crt");
+            //InputStream fis = new FileInputStream("C:\\Users\\Nightzsky\\Downloads\\CA.crt");
+            InputStream fis = new FileInputStream("CA.crt");
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             X509Certificate CAcert = (X509Certificate)cf.generateCertificate(fis);
             PublicKey CAkey = CAcert.getPublicKey();
@@ -101,12 +98,13 @@ public class ClientCP2 {
     }
 
     public static void main(String[] args) {
+        long timeStarted = 0;
 
         String filename = "rr.txt";
         if (args.length > 0) filename = args[0];
 
         String serverAddress = "localhost";
-        if (args.length > 1) filename = args[1];
+        if (args.length > 1) serverAddress = args[1];
 
         int port = 4321;
         if (args.length > 2) port = Integer.parseInt(args[2]);
@@ -125,7 +123,7 @@ public class ClientCP2 {
         byte[] encryptedR = null;
         X509Certificate serverCert = null;
 
-        long timeStarted = System.nanoTime();
+        //long timeStarted = System.nanoTime();
 
         try {
 
@@ -228,43 +226,57 @@ public class ClientCP2 {
 
             System.out.println("Sending file...");
 
+            //encrypting the file that is to be sent
+            Cipher AEScipher = Cipher.getInstance("AES/ECB/PKCS5padding");
+            AEScipher.init(Cipher.ENCRYPT_MODE,AES_key);
+
+
+            // Open the file
+            File inputFile = new File(filename);
+            fileInputStream = new FileInputStream(inputFile);
+            bufferedFileInputStream = new BufferedInputStream(fileInputStream);
+
+            timeStarted = System.nanoTime();
+
             // Send the filename
             toServer.writeInt(0);
             toServer.writeInt(filename.getBytes().length);
+            toServer.writeInt(fileInputStream.available());
             System.out.println(filename.getBytes().length);
             toServer.write(filename.getBytes());
             //toServer.flush();
 
-            // Open the file
-            fileInputStream = new FileInputStream(filename);
-            bufferedFileInputStream = new BufferedInputStream(fileInputStream);
-
-            byte [] fromFileBuffer = new byte[117];
-
-
-            // Send the file
-            for (boolean fileEnded = false; !fileEnded;) {
-                numBytes = bufferedFileInputStream.read(fromFileBuffer);
-                fileEnded = numBytes < 117;
-
-                toServer.writeInt(1);
-                toServer.writeInt(numBytes);
-                toServer.write(fromFileBuffer);
-                toServer.flush();
-            }
-
-            bufferedFileInputStream.close();
+            byte[] fileArray = new byte[(int)inputFile.length()];
+            fileInputStream.read(fileArray,0,fileArray.length);
             fileInputStream.close();
 
+            byte[] encryptedFile = AEScipher.doFinal(fileArray);
 
-            System.out.println("Closing connection...");
+            toServer.writeInt(1);
+            toServer.writeInt(encryptedFile.length);
+            System.out.println(encryptedFile.length);
+            toServer.write(encryptedFile,0,encryptedFile.length);
+            toServer.flush();
 
+            //after receive response from the server, close all the connection
+            int packetType = fromServer.readInt();
+            if (packetType == 3){
+                byte[] responseForFile = responseFromServer(fromServer);
+
+                if ((new String(responseForFile)).contains("Done")){
+                    System.out.println("Closing connection...");
+                    bufferedFileInputStream.close();
+                    fileInputStream.close();
+                    clientSocket.close();
+                }
+            }
 
         } catch (Exception e) {e.printStackTrace();}
 
         long timeTaken = System.nanoTime() - timeStarted;
         System.out.println("Program took: " + timeTaken/1000000.0 + "ms to run");
     }
+
 
 
 }

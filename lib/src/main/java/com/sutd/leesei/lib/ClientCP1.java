@@ -1,19 +1,19 @@
 package com.sutd.leesei.lib;
 
-/**
- * Created by Nightzsky on 4/15/2018.
- */
-
+/*
+    Author: Siow Lee Sei(1002257), Ong Jing Xuan(1002065)
+*/
 import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
 import java.net.Socket;
-import java.nio.ByteBuffer;
 import java.security.PublicKey;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -21,9 +21,7 @@ import java.util.Arrays;
 import java.util.Random;
 
 import javax.crypto.Cipher;
-import javax.print.attribute.standard.JobMessageFromOperator;
 
-import jdk.internal.dynalink.support.TypeConverterFactory;
 
 public class ClientCP1 {
 
@@ -52,7 +50,8 @@ public class ClientCP1 {
     public static boolean verifyServerCert(String serverCertString, X509Certificate serverCert) throws Exception{
         boolean verified = false;
         if (serverCertString.contains("Nightzsky")){
-            InputStream fis = new FileInputStream("C:\\Users\\Nightzsky\\Downloads\\CA.crt");
+            //InputStream fis = new FileInputStream("C:\\Users\\Nightzsky\\Downloads\\CA.crt");
+            InputStream fis = new FileInputStream("CA.crt");
             CertificateFactory cf = CertificateFactory.getInstance("X.509");
             X509Certificate CAcert = (X509Certificate)cf.generateCertificate(fis);
             PublicKey CAkey = CAcert.getPublicKey();
@@ -89,12 +88,13 @@ public class ClientCP1 {
     }
 
     public static void main(String[] args) {
+        long timeStarted = 0;
 
         String filename = "rr.txt";
         if (args.length > 0) filename = args[0];
 
         String serverAddress = "localhost";
-        if (args.length > 1) filename = args[1];
+        if (args.length > 1) serverAddress = args[1];
 
         int port = 4321;
         if (args.length > 2) port = Integer.parseInt(args[2]);
@@ -113,7 +113,6 @@ public class ClientCP1 {
         byte[] encryptedR = null;
         X509Certificate serverCert = null;
 
-        long timeStarted = System.nanoTime();
 
         try {
 
@@ -203,36 +202,59 @@ public class ClientCP1 {
 
             System.out.println("Sending file...");
 
-            // Send the filename
-            toServer.writeInt(0);
-            toServer.writeInt(filename.getBytes().length);
-            System.out.println(filename.getBytes().length);
-            toServer.write(filename.getBytes());
-            //toServer.flush();
+            long startTime = System.currentTimeMillis();
+            Cipher rsaCipher = Cipher.getInstance("RSA/ECB/PKCS1Padding");
+            rsaCipher.init(Cipher.ENCRYPT_MODE,publicKey);
+
+
 
             // Open the file
             fileInputStream = new FileInputStream(filename);
             bufferedFileInputStream = new BufferedInputStream(fileInputStream);
 
+            int totalFileSize = fileInputStream.available();
+
+            timeStarted = System.nanoTime();
+
+            // Send the filename
+            toServer.writeInt(0);
+            toServer.writeInt(filename.getBytes().length);
+            System.out.println(filename.getBytes().length);
+            toServer.writeInt(totalFileSize);
+            toServer.write(filename.getBytes());
+            //toServer.flush();
+
             byte [] fromFileBuffer = new byte[117];
-
-
             // Send the file
             for (boolean fileEnded = false; !fileEnded;) {
                 numBytes = bufferedFileInputStream.read(fromFileBuffer);
+
+
+                byte[] encryptedContent = rsaCipher.doFinal(fromFileBuffer);
                 fileEnded = numBytes < 117;
 
                 toServer.writeInt(1);
                 toServer.writeInt(numBytes);
-                toServer.write(fromFileBuffer);
+                toServer.writeInt(encryptedContent.length);
+                toServer.write(encryptedContent);
+
+                System.out.println(new String(encryptedContent));
+
                 toServer.flush();
             }
 
-            bufferedFileInputStream.close();
-            fileInputStream.close();
+            //after receive response from the server, close all the connection
+            int packetType = fromServer.readInt();
+            if (packetType == 3){
+                byte[] responseForFile = responseFromServer(fromServer);
 
-
-            System.out.println("Closing connection...");
+                if ((new String(responseForFile)).contains("Done")){
+                    System.out.println("Closing connection...");
+                    bufferedFileInputStream.close();
+                    fileInputStream.close();
+                    clientSocket.close();
+                }
+            }
 
 
         } catch (Exception e) {e.printStackTrace();}
@@ -240,6 +262,5 @@ public class ClientCP1 {
         long timeTaken = System.nanoTime() - timeStarted;
         System.out.println("Program took: " + timeTaken/1000000.0 + "ms to run");
     }
-
 
 }

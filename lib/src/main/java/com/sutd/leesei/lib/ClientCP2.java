@@ -1,9 +1,20 @@
 package com.sutd.leesei.lib;
 
+<<<<<<< HEAD
 /*
     Author: Siow Lee Sei(1002257), Ong Jing Xuan(1002065)
 */
 import java.io.BufferedInputStream;
+=======
+/**
+ * Created by Nightzsky on 4/15/2018.
+ */
+
+import com.sun.org.apache.xpath.internal.SourceTree;
+
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+>>>>>>> 52ef126a350efda8d5ae76628a3a3a5c9ef12d5c
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -13,6 +24,8 @@ import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.net.Socket;
 import java.security.PublicKey;
@@ -24,6 +37,13 @@ import java.util.Random;
 import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
+<<<<<<< HEAD
+=======
+import javax.print.attribute.standard.JobMessageFromOperator;
+import javax.xml.bind.DatatypeConverter;
+
+import jdk.internal.dynalink.support.TypeConverterFactory;
+>>>>>>> 52ef126a350efda8d5ae76628a3a3a5c9ef12d5c
 
 public class ClientCP2 {
 
@@ -119,6 +139,9 @@ public class ClientCP2 {
         FileInputStream fileInputStream = null;
         BufferedInputStream bufferedFileInputStream = null;
 
+        PrintWriter stringOut = null;
+        BufferedReader stringIn = null;
+
         int R = 0;
         byte[] encryptedR = null;
         X509Certificate serverCert = null;
@@ -133,6 +156,8 @@ public class ClientCP2 {
             clientSocket = new Socket(serverAddress, port);
             toServer = new DataOutputStream(clientSocket.getOutputStream());
             fromServer = new DataInputStream(clientSocket.getInputStream());
+
+            stringIn = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
             /*
             Before sending file, needs to identify the server that we are connected to is correct
@@ -224,6 +249,8 @@ public class ClientCP2 {
             sendMessageToServer(2,toServer,encryptedAESKey);
             System.out.println("Done sending the encrypted AES key!");
 
+            BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(toServer);
+
             System.out.println("Sending file...");
 
             //encrypting the file that is to be sent
@@ -250,6 +277,7 @@ public class ClientCP2 {
             fileInputStream.read(fileArray,0,fileArray.length);
             fileInputStream.close();
 
+<<<<<<< HEAD
             byte[] encryptedFile = AEScipher.doFinal(fileArray);
 
             toServer.writeInt(1);
@@ -257,12 +285,18 @@ public class ClientCP2 {
             System.out.println(encryptedFile.length);
             toServer.write(encryptedFile,0,encryptedFile.length);
             toServer.flush();
+=======
+            byte [] fromFileBuffer = new byte[117];
+            bufferedFileInputStream.read(fromFileBuffer, 0, fromFileBuffer.length);
+            bufferedFileInputStream.close();
+>>>>>>> 52ef126a350efda8d5ae76628a3a3a5c9ef12d5c
 
             //after receive response from the server, close all the connection
             int packetType = fromServer.readInt();
             if (packetType == 3){
                 byte[] responseForFile = responseFromServer(fromServer);
 
+<<<<<<< HEAD
                 if ((new String(responseForFile)).contains("Done")){
                     System.out.println("Closing connection...");
                     bufferedFileInputStream.close();
@@ -271,6 +305,48 @@ public class ClientCP2 {
                 }
             }
 
+=======
+                toServer.writeInt(1);
+                toServer.writeInt(numBytes);
+                toServer.write(fromFileBuffer);
+                toServer.flush();
+
+                bufferedFileOutputStream.write(filename.getBytes());
+                bufferedFileOutputStream.flush();
+            }
+
+            // Encrypt the file
+            byte[] encryptedFile = RSACipher.doFinal(fromFileBuffer);
+            System.out.println(DatatypeConverter.printBase64Binary(encryptedFile));
+
+            // Inform server that encrypted file is coming
+            toServer.writeInt(2);
+            System.out.println("Length: " + encryptedFile.length);
+            toServer.writeInt(encryptedFile.length);
+            toServer.flush();
+
+            toServer.write(encryptedFile, 0, encryptedFile.length);
+            toServer.flush();
+
+            bufferedFileInputStream.close();
+            fileInputStream.close();
+
+            // Receiving from server
+            while (true){
+                String end = stringIn.readLine();
+                if (end.equals("Ending transfer.")){
+                    System.out.println("Server: " + end);
+                    break;
+                } else{
+                    System.out.println("Request to end failed.");
+                }
+            }
+
+
+            System.out.println("Closing connection...");
+
+
+>>>>>>> 52ef126a350efda8d5ae76628a3a3a5c9ef12d5c
         } catch (Exception e) {e.printStackTrace();}
 
         long timeTaken = System.nanoTime() - timeStarted;
@@ -278,5 +354,9 @@ public class ClientCP2 {
     }
 
 
+<<<<<<< HEAD
 
 }
+=======
+}
+>>>>>>> 52ef126a350efda8d5ae76628a3a3a5c9ef12d5c

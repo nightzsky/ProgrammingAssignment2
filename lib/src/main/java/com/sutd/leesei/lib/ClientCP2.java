@@ -4,13 +4,19 @@ package com.sutd.leesei.lib;
  * Created by Nightzsky on 4/15/2018.
  */
 
+import com.sun.org.apache.xpath.internal.SourceTree;
+
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.math.BigInteger;
 import java.net.Socket;
 import java.nio.ByteBuffer;
@@ -26,6 +32,7 @@ import javax.crypto.Cipher;
 import javax.crypto.KeyGenerator;
 import javax.crypto.SecretKey;
 import javax.print.attribute.standard.JobMessageFromOperator;
+import javax.xml.bind.DatatypeConverter;
 
 import jdk.internal.dynalink.support.TypeConverterFactory;
 
@@ -121,6 +128,9 @@ public class ClientCP2 {
         FileInputStream fileInputStream = null;
         BufferedInputStream bufferedFileInputStream = null;
 
+        PrintWriter stringOut = null;
+        BufferedReader stringIn = null;
+
         int R = 0;
         byte[] encryptedR = null;
         X509Certificate serverCert = null;
@@ -135,6 +145,8 @@ public class ClientCP2 {
             clientSocket = new Socket(serverAddress, port);
             toServer = new DataOutputStream(clientSocket.getOutputStream());
             fromServer = new DataInputStream(clientSocket.getInputStream());
+
+            stringIn = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
 
             /*
             Before sending file, needs to identify the server that we are connected to is correct
@@ -226,6 +238,8 @@ public class ClientCP2 {
             sendMessageToServer(2,toServer,encryptedAESKey);
             System.out.println("Done sending the encrypted AES key!");
 
+            BufferedOutputStream bufferedFileOutputStream = new BufferedOutputStream(toServer);
+
             System.out.println("Sending file...");
 
             // Send the filename
@@ -240,7 +254,8 @@ public class ClientCP2 {
             bufferedFileInputStream = new BufferedInputStream(fileInputStream);
 
             byte [] fromFileBuffer = new byte[117];
-
+            bufferedFileInputStream.read(fromFileBuffer, 0, fromFileBuffer.length);
+            bufferedFileInputStream.close();
 
             // Send the file
             for (boolean fileEnded = false; !fileEnded;) {
@@ -251,10 +266,37 @@ public class ClientCP2 {
                 toServer.writeInt(numBytes);
                 toServer.write(fromFileBuffer);
                 toServer.flush();
+
+                bufferedFileOutputStream.write(filename.getBytes());
+                bufferedFileOutputStream.flush();
             }
+
+            // Encrypt the file
+            byte[] encryptedFile = RSACipher.doFinal(fromFileBuffer);
+            System.out.println(DatatypeConverter.printBase64Binary(encryptedFile));
+
+            // Inform server that encrypted file is coming
+            toServer.writeInt(2);
+            System.out.println("Length: " + encryptedFile.length);
+            toServer.writeInt(encryptedFile.length);
+            toServer.flush();
+
+            toServer.write(encryptedFile, 0, encryptedFile.length);
+            toServer.flush();
 
             bufferedFileInputStream.close();
             fileInputStream.close();
+
+            // Receiving from server
+            while (true){
+                String end = stringIn.readLine();
+                if (end.equals("Ending transfer.")){
+                    System.out.println("Server: " + end);
+                    break;
+                } else{
+                    System.out.println("Request to end failed.");
+                }
+            }
 
 
             System.out.println("Closing connection...");
